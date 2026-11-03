@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+#
+# opncdjob — VPN (Rocket) только для opencode.
+#
+# Поднимает локальный прокси mihomo внутри текущего окружения (WSL2/Ubuntu)
+# и переключает на него исходящие запросы background-сервиса OpenCode.
+# Сеть хоста и остальной трафик не затрагиваются.
+#
+#   ./opncdjob                 интерактивное меню (или статус без TTY)
+#   ./opncdjob install         установка/переустановка
+#   ./opncdjob status          текущее состояние
+#   ./opncdjob enable          включить прокси + opencode
+#   ./opncdjob disable         вернуть opencode напрямую (прокси оставить)
+#   ./opncdjob start|stop      только процесс прокси
+#   ./opncdjob update          обновить конфиг из подписки
+#   ./opncdjob logs [N]        хвост лога mihomo
+#   ./opncdjob env             export-строки для shell
+#   ./opncdjob run <cmd…>      выполнить команду через прокси
+#   ./opncdjob uninstall [--yes] [--purge]
+#   ./opncdjob help
+#
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_DIR="$(dirname "$SCRIPT_PATH")"
+HELPERS="$REPO_DIR/lib/helpers.py"
+
+# shellcheck source=lib/common.sh
+. "$REPO_DIR/lib/common.sh"
+# shellcheck source=lib/config.sh
+. "$REPO_DIR/lib/config.sh"
+# shellcheck source=lib/mihomo.sh
+. "$REPO_DIR/lib/mihomo.sh"
+# shellcheck source=lib/opencode.sh
+. "$REPO_DIR/lib/opencode.sh"
+# shellcheck source=lib/install.sh
+. "$REPO_DIR/lib/install.sh"
+# shellcheck source=lib/menu.sh
+. "$REPO_DIR/lib/menu.sh"
+
+usage() {
+    sed -n '3,18p' "$SCRIPT_PATH" | sed -e 's/^# \{0,1\}//'
+}
+
+main() {
+    local cmd="${1:-menu}"
+
+    detect_environment
+
+    case "$cmd" in
+        menu)
+            interactive_menu
+            ;;
+        install | reinstall)
+            cmd_install
+            ;;
+        status)
+            print_status
+            ;;
+        enable)
+            cmd_enable
+            ;;
+        disable)
+            cmd_disable
+            ;;
+        start)
+            mihomo_start
+            ;;
+        stop)
+            mihomo_stop
+            ;;
+        update)
+            shift
+            for arg in "$@"; do
+                [[ "$arg" == "--quiet" || "$arg" == "-q" ]] && QUIET=1
+            done
+            cmd_update
+            ;;
+        logs)
+            shift
+            cmd_logs "${1:-60}"
+            ;;
+        env)
+            cmd_env
+            ;;
+        run)
+            shift
+            cmd_run "$@"
+            ;;
+        uninstall)
+            shift
+            cmd_uninstall "$@"
+            ;;
+        help | -h | --help)
+            usage
+            ;;
+        *)
+            err "неизвестная команда: $cmd"
+            printf '\n'
+            usage
+            exit 2
+            ;;
+    esac
+}
+
+main "$@"
